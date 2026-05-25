@@ -1,13 +1,3 @@
----
-title: PixelTrace
-emoji: 🚀
-colorFrom: blue
-colorTo: indigo
-sdk: docker
-app_port: 8000
-pinned: false
----
-
 # PixelTrace API
 
 # Image Vectorizer API - Dokumentasi Lengkap
