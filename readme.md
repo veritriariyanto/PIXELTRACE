@@ -1,3 +1,5 @@
+# PixelTrace API
+
 # Image Vectorizer API - Dokumentasi Lengkap
 
 ## 📋 Daftar Isi
