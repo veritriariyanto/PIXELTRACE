@@ -33,8 +33,37 @@ class CLIPVectorizer:
             inputs = self.processor(images=image, return_tensors="pt").to(self.device)
             
             with torch.no_grad():
-                outputs = self.model.vision_model(**{k: v for k, v in inputs.items() if k == 'pixel_values'})
-                image_embeds = outputs.pooler_output
+                # Prefer the model helper that returns projected image features
+                # (CLIPModel.get_image_features applies the visual projection to match
+                # the configured embedding dimension, e.g., 512).
+                if hasattr(self.model, "get_image_features"):
+                    image_embeds = self.model.get_image_features(pixel_values=inputs['pixel_values'])
+                else:
+                    # Fallback: run vision backbone and apply visual projection if present
+                    outputs = self.model.vision_model(pixel_values=inputs['pixel_values'])
+                    pooled = outputs.pooler_output
+                    if hasattr(self.model, "visual_projection"):
+                        image_embeds = self.model.visual_projection(pooled)
+                    else:
+                        image_embeds = pooled
+
+                # Ensure we have a Tensor (some transformers versions return ModelOutput)
+                if not isinstance(image_embeds, torch.Tensor):
+                    if hasattr(image_embeds, "pooler_output"):
+                        image_embeds = image_embeds.pooler_output
+                    elif hasattr(image_embeds, "image_embeds"):
+                        image_embeds = image_embeds.image_embeds
+                    elif hasattr(image_embeds, "last_hidden_state"):
+                        # take the pooled representation if only last_hidden_state exists
+                        image_embeds = image_embeds.last_hidden_state
+                        # if it's sequence, try mean pooling over seq dim
+                        if image_embeds.dim() == 3:
+                            image_embeds = image_embeds.mean(dim=1)
+                    elif isinstance(image_embeds, (list, tuple)) and len(image_embeds) > 0:
+                        image_embeds = image_embeds[0]
+                    else:
+                        raise HTTPException(status_code=500, detail="Unable to extract tensor from model output")
+
                 image_features = F.normalize(image_embeds, p=2, dim=-1)
             
             vector_list = image_features.squeeze().detach().cpu().tolist()
